@@ -1,0 +1,26 @@
+[project]
+name = "flock-tagger"
+version = "0.1.0"
+description = "Tag OSM ways within surveillance camera coverage radius"
+authors = [
+    {name = "Coulter"}
+]
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "osmium (>=4.2.0,<5.0.0)",
+    "shapely (>=2.1.2,<3.0.0)",
+    "pyproj (>=3.7.2,<4.0.0)",
+    "utm (>=0.8.1,<0.9.0)"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
