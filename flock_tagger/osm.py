@@ -65,12 +65,12 @@ def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
     if not (-180 <= lon1 <= 180 and -180 <= lon2 <= 180):
         raise ValueError(f"Longitude must be between -180 and 180: got {lon1}, {lon2}")
 
-    phi1 = radians(lat1)
-    phi2 = radians(lat2)
-    dphi = radians(lat2 - lat1)
-    dlambda = radians(lon2 - lon1)
+    φ₁ = radians(lat1)
+    φ₂ = radians(lat2)
+    Δφ = radians(lat2 - lat1)
+    Δλ = radians(lon2 - lon1)
 
-    a = sin(dphi / 2) ** 2 + cos(phi1) * cos(phi2) * sin(dlambda / 2) ** 2
+    a = sin(Δφ / 2) ** 2 + cos(φ₁) * cos(φ₂) * sin(Δλ / 2) ** 2
     c = 2 * atan2(sqrt(a), sqrt(1 - a))
 
     return EARTH_RADIUS_M * c
