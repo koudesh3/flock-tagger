@@ -155,10 +155,9 @@ class TaggingHandler(osmium.SimpleHandler):
 
     def _calculate_surveillance_level(self, node_lat: float, node_lon: float) -> Optional[int]:
         """Return highest surveillance level for node based on nearby cameras."""
-        if self.camera_tree is not None:
-            return self._spatial_index_lookup(node_lat, node_lon)
-        else:
-            return self._linear_scan_lookup(node_lat, node_lon)
+        if self.camera_tree is None:
+            return None
+        return self._spatial_index_lookup(node_lat, node_lon)
 
     def _spatial_index_lookup(self, node_lat: float, node_lon: float) -> Optional[int]:
         """Query R-tree for nearby cameras and return highest surveillance level."""
@@ -185,28 +184,6 @@ class TaggingHandler(osmium.SimpleHandler):
 
             if distance <= 50:
                 return 3  # Early termination: highest level found
-
-            if distance < min_distance:
-                min_distance = distance
-                level = get_surveillance_level(distance)
-                if level and (max_level is None or level > max_level):
-                    max_level = level
-
-        return max_level
-
-    def _linear_scan_lookup(self, node_lat: float, node_lon: float) -> Optional[int]:
-        """Fallback: scan all cameras linearly (used when spatial index unavailable)."""
-        max_level = None
-        min_distance = float('inf')
-
-        for cam in self.cameras:
-            if 'lat' not in cam or 'lon' not in cam:
-                continue
-
-            distance = haversine_distance(node_lat, node_lon, cam['lat'], cam['lon'])
-
-            if distance <= 50:
-                return 3
 
             if distance < min_distance:
                 min_distance = distance
