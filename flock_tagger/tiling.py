@@ -72,8 +72,16 @@ def show_progress(total_tiles: int):
 def generate_tile_grid(bbox: BBox, tile_size: float = 0.1) -> List[BBox]:
     """Generate non-overlapping tiles covering the bounding box."""
     import math
-    
+
+    if not bbox or len(bbox) != 4:
+        raise ValueError("bbox must be a tuple of 4 coordinates (min_lon, min_lat, max_lon, max_lat)")
+    if tile_size <= 0:
+        raise ValueError("tile_size must be positive")
+
     min_lon, min_lat, max_lon, max_lat = bbox
+
+    if min_lon >= max_lon or min_lat >= max_lat:
+        raise ValueError("Invalid bbox: min values must be less than max values")
     
     n_lon = math.ceil((max_lon - min_lon) / tile_size)
     n_lat = math.ceil((max_lat - min_lat) / tile_size)
@@ -99,6 +107,17 @@ def extract_tiles(
     batch_size: int = 25
 ) -> None:
     """Extract tiles from OSM file in batches to avoid memory exhaustion."""
+    if not tiles:
+        raise ValueError("tiles list cannot be empty")
+    if not tile_ids:
+        raise ValueError("tile_ids list cannot be empty")
+    if len(tiles) != len(tile_ids):
+        raise ValueError(f"tiles and tile_ids must have same length: {len(tiles)} != {len(tile_ids)}")
+    if not os.path.exists(input_pbf):
+        raise FileNotFoundError(f"Input PBF file not found: {input_pbf}")
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+
     total = len(tiles)
     
     if total <= batch_size:
@@ -136,6 +155,11 @@ def _show_extraction_progress(current_batch: int, total_batches: int) -> None:
 
 def _extract_batch(tiles: List[BBox], tile_ids: List[TileID], input_pbf: str) -> None:
     """Extract a batch of tiles using osmium."""
+    if len(tiles) != len(tile_ids):
+        raise ValueError(f"tiles and tile_ids must have same length: {len(tiles)} != {len(tile_ids)}")
+
+    os.makedirs('data/tmp/tiles', exist_ok=True)
+
     config = {
         "extracts": [
             {
@@ -164,6 +188,13 @@ def filter_tiles_with_cameras(
     cell_size: float
 ) -> List[TileID]:
     """Return indices of tiles that have camera coverage."""
+    if tiles is None:
+        raise ValueError("tiles cannot be None")
+    if camera_grid is None:
+        raise ValueError("camera_grid cannot be None")
+    if cell_size <= 0:
+        raise ValueError("cell_size must be positive")
+
     tiles_with_cameras = []
     
     for i, (min_lon, min_lat, max_lon, max_lat) in enumerate(tiles):
@@ -197,6 +228,9 @@ def process_tile(
 ) -> Tuple[TileID, str, Optional[str], Optional[Dict]]:
     """Process a single tile: tag nodes within camera range."""
     try:
+        if not os.path.exists(tile_pbf):
+            return (tile_id, f"ERROR: Tile file not found: {tile_pbf}", None, None)
+
         min_lon, min_lat, max_lon, max_lat = tile_bounds
 
         tile_cameras = get_cameras_for_tile(
@@ -236,6 +270,13 @@ def process_all_tiles(
     Returns:
         (tagged_pbfs, processing_stats, tile_stats)
     """
+    if not tiles:
+        raise ValueError("tiles list cannot be empty")
+    if not os.path.exists(input_pbf):
+        raise FileNotFoundError(f"Input PBF file not found: {input_pbf}")
+    if max_workers <= 0:
+        raise ValueError("max_workers must be positive")
+
     os.makedirs('data/tmp/tiles', exist_ok=True)
     os.makedirs('data/tmp/tiles/tagged', exist_ok=True)
 
@@ -344,6 +385,17 @@ def process_all_tiles(
 
 def merge_tiles(tagged_pbfs: List[str], output_pbf: str) -> None:
     """Merge tagged tiles into single output file."""
+    if not tagged_pbfs:
+        raise ValueError("tagged_pbfs list cannot be empty - no tiles to merge")
+
+    missing_files = [f for f in tagged_pbfs if not os.path.exists(f)]
+    if missing_files:
+        raise FileNotFoundError(f"Some tile files not found: {missing_files[:5]}")
+
+    output_dir = os.path.dirname(output_pbf)
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
     subprocess.run(
         ['osmium', 'merge'] + tagged_pbfs + ['-o', output_pbf, '--overwrite'],
         check=True,
