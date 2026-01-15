@@ -1,6 +1,7 @@
 """OSM file processing: single-pass streaming with haversine distance calculation."""
 
 from math import radians, cos, sin, sqrt, atan2
+import os
 import subprocess
 from typing import List, Dict, Optional, Tuple
 
@@ -59,6 +60,11 @@ def get_osm_bbox(input_path: str) -> Tuple[float, float, float, float]:
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance in meters between two lat/lon points."""
+    if not (-90 <= lat1 <= 90 and -90 <= lat2 <= 90):
+        raise ValueError(f"Latitude must be between -90 and 90: got {lat1}, {lat2}")
+    if not (-180 <= lon1 <= 180 and -180 <= lon2 <= 180):
+        raise ValueError(f"Longitude must be between -180 and 180: got {lon1}, {lon2}")
+
     phi1 = radians(lat1)
     phi2 = radians(lat2)
     dphi = radians(lat2 - lat1)
@@ -75,6 +81,7 @@ class TaggingHandler(osmium.SimpleHandler):
 
     def __init__(self, cameras: List[Dict], output_writer: osmium.SimpleWriter):
         super().__init__()
+        self._validate_cameras(cameras)
         self.cameras = cameras
         self.writer = output_writer
         self.tagged_count = 0
@@ -91,6 +98,20 @@ class TaggingHandler(osmium.SimpleHandler):
 
         if cameras:
             self._build_spatial_index(cameras)
+
+    def _validate_cameras(self, cameras: List[Dict]) -> None:
+        """Validate camera data structure."""
+        if cameras is None:
+            raise ValueError("Cameras list cannot be None")
+
+        for i, cam in enumerate(cameras):
+            if not isinstance(cam, dict):
+                raise ValueError(f"Camera at index {i} must be a dict, got {type(cam)}")
+            if 'lat' in cam or 'lon' in cam:
+                if 'lat' not in cam or 'lon' not in cam:
+                    raise ValueError(f"Camera at index {i} has incomplete coordinates")
+                if not isinstance(cam['lat'], (int, float)) or not isinstance(cam['lon'], (int, float)):
+                    raise ValueError(f"Camera at index {i} has non-numeric coordinates")
 
     def _build_spatial_index(self, cameras: List[Dict]) -> None:
         """Build R-tree spatial index for efficient camera queries."""
@@ -223,16 +244,37 @@ def process_osm_file(
     verbose: bool = False
 ) -> Dict[str, int]:
     """Process OSM file and tag nodes with surveillance levels (single-pass)."""
+    if not input_path:
+        raise ValueError("Input path cannot be empty")
+    if not output_path:
+        raise ValueError("Output path cannot be empty")
+    if not os.path.exists(input_path):
+        raise FileNotFoundError(f"Input file not found: {input_path}")
+    if not os.path.isfile(input_path):
+        raise ValueError(f"Input path is not a file: {input_path}")
+
+    output_dir = os.path.dirname(output_path)
+    if output_dir and not os.path.exists(output_dir):
+        raise FileNotFoundError(f"Output directory does not exist: {output_dir}")
+    if output_dir and not os.access(output_dir, os.W_OK):
+        raise PermissionError(f"Output directory is not writable: {output_dir}")
+
+    if cameras is None:
+        raise ValueError("Cameras list cannot be None")
+
     if verbose:
         print(f"Processing {input_path} with {len(cameras)} cameras...")
 
-    with osmium.SimpleWriter(output_path, overwrite=True) as writer:
-        handler = TaggingHandler(cameras, writer)
-        handler.apply_file(input_path)
+    try:
+        with osmium.SimpleWriter(output_path, overwrite=True) as writer:
+            handler = TaggingHandler(cameras, writer)
+            handler.apply_file(input_path)
+    except Exception as e:
+        raise RuntimeError(f"Failed to process OSM file: {e}") from e
 
     if verbose:
         total_tagged = sum(
-            handler.stats[f'nodes_level_{i}'] 
+            handler.stats[f'nodes_level_{i}']
             for i in range(1, 4)
         )
         print(f"Tagged {total_tagged:,} nodes:")
