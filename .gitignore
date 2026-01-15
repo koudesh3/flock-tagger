@@ -1,5 +1,5 @@
 # Data files
-data/input/
+data/input/*
 !data/input/cameras.json
 data/output/
 data/tmp/
